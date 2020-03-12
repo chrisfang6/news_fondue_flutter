@@ -1,13 +1,36 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webview_plugin/flutter_webview_plugin.dart';
 
 void main() => runApp(MyApp());
 
 class MyApp extends StatelessWidget {
+  static const platform = const MethodChannel('news.fondue.flutter/detail');
+
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    WebviewScaffold _webviewScaffold = WebviewScaffold(
+      url: "about:blank",
+      appBar: new AppBar(
+        title: Text("Loading"),
+      ),
+    );
+
+    FlutterWebviewPlugin flutterWebviewPlugin = FlutterWebviewPlugin();
+    flutterWebviewPlugin.onStateChanged.listen((WebViewStateChanged state) {
+      debugPrint("# state changed to ${state.type}");
+      if (state.type == WebViewState.startLoad) {
+        debugPrint("# start loading ${state.url}");
+        if (state.url == "about:blank") {
+          debugPrint("# Update detail");
+          updateNewsDetail(flutterWebviewPlugin);
+        }
+      }
+    });
+
     return MaterialApp(
       title: 'Flutter Module',
       theme: ThemeData(
@@ -22,29 +45,20 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
       ),
       // home: MyHomePage(title: 'Flutter Demo Home Page'),
-      onGenerateRoute: (settings) {
-        debugPrint("# setting name: ${settings.name}");
-        String url;
-        String title;
-        if (settings.name == "/") {
-          url = "http://news.163.com/20/0311/09/F7E6SBON00019B3E.html";
-          title = "title here";
-        } else {
-          var jsonObj = json.decode(settings.name);
-          url = jsonObj["url"];
-          title = jsonObj["title"];
-        }
-        debugPrint("# url: $url");
-        debugPrint("# title: $title");
-        return MaterialPageRoute(builder: (context) {
-          return WebviewScaffold(
-            url: url,
-            appBar: new AppBar(
-              title: new Text(title),
-            ),
-          );
-        });
-      },
+      routes: {"/": (_) => _webviewScaffold},
     );
+  }
+
+  Future<void> updateNewsDetail(
+      FlutterWebviewPlugin flutterWebviewPlugin) async {
+    try {
+      final String result = await platform.invokeMethod('getDetail');
+      Map<String, dynamic> detail = jsonDecode(result);
+      debugPrint("# url: ${detail["url"]}");
+      debugPrint("# url: ${detail["title"]}");
+      flutterWebviewPlugin.reloadUrl(detail['url']);
+    } on PlatformException catch (e) {
+      debugPrint("# Failed to get detail: '${e.message}'.");
+    }
   }
 }
